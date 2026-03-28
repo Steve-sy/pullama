@@ -18,6 +18,15 @@ download interrupted, starting from scratch
 
 ## Install
 
+**Linux / macOS (recommended):**
+```bash
+pipx install pullama-cli
+```
+
+> `pipx` is the standard (protection) way to install Python CLI tools on modern Linux (Ubuntu 22.04+, Debian 12+).
+> Install pipx first if needed: `sudo apt install pipx && pipx ensurepath`
+
+**Alternative (virtualenvs):**
 ```bash
 pip install pullama-cli
 ```
