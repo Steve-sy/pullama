@@ -455,7 +455,14 @@ def cmd_pull(args):
                 print(f"  Re-run this terminal as Administrator, then:")
                 print(f"\n    {Colors.BOLD}pullama pull {args.model}{Colors.ENDC}\n")
             else:
-                print(f"  Re-run with sudo:\n")
+                actual_path = shutil.which("pullama") or os.path.abspath(sys.argv[0])
+                symlink_exists = os.path.exists("/usr/local/bin/pullama")
+                if not symlink_exists:
+                    print(f"\n  One-time setup — make pullama available to sudo:\n")
+                    print(f"    {Colors.BOLD}sudo ln -s {actual_path} /usr/local/bin/pullama{Colors.ENDC}\n")
+                    print(f"  Then re-run:\n")
+                else:
+                    print(f"  Re-run with sudo:\n")
                 print(f"    {Colors.BOLD}sudo pullama pull {args.model}{Colors.ENDC}\n")
             sys.exit(1)
     else:
@@ -677,7 +684,16 @@ def cmd_install(args):
     if not models_path.startswith(os.path.expanduser("~")):
         system = platform.system().lower()
         if system != "windows" and os.geteuid() != 0:
-            print_error("System models path requires sudo. Re-run with: sudo pullama install ...")
+            print_error("System models path requires elevated permissions.")
+            actual_path = shutil.which("pullama") or os.path.abspath(sys.argv[0])
+            symlink_exists = os.path.exists("/usr/local/bin/pullama")
+            if not symlink_exists:
+                print(f"\n  One-time setup — make pullama available to sudo:\n")
+                print(f"    {Colors.BOLD}sudo ln -s {actual_path} /usr/local/bin/pullama{Colors.ENDC}\n")
+                print(f"  Then re-run:\n")
+            else:
+                print(f"\n  Re-run with sudo:\n")
+            print(f"    {Colors.BOLD}sudo pullama install --model {args.model} --blobsPath {args.blobsPath}{Colors.ENDC}\n")
             sys.exit(1)
 
     # Copy manifest
