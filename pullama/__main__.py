@@ -30,7 +30,11 @@ DEFAULT_REGISTRY = "registry.ollama.ai"
 BLOBS_PATTERN = "blobs"
 PULLAMA_DIR = os.path.expanduser("~/.pullama")
 STATE_FILE = os.path.join(PULLAMA_DIR, "state.json")
-VERSION = "1.0.0"
+try:
+    from importlib.metadata import version as _pkg_version
+    VERSION = _pkg_version("pullama-cli")
+except Exception:
+    VERSION = "unknown"
 
 
 # ─── Colors ───────────────────────────────────────────────────────────────────
