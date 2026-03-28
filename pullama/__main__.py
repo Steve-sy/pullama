@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Pullama — Resumable Ollama Model Downloader & Installer
-https://github.com/yourusername/pullama
+https://github.com/Steve-sy/pullama
 ---------------------------------------------------
 Fix for ollama pull TLS handshake timeouts and disconnects.
 Downloads models with resume support and installs them directly into Ollama.
