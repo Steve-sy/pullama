@@ -127,7 +127,8 @@ def parse_model_name(model_name_input):
     return namespace, model, tag
 
 def get_default_models_path():
-    """Auto-detect Ollama's models directory."""
+    """Auto-detect where Ollama actually stores models."""
+    # Priority 1: explicit env var
     env_path = os.environ.get("OLLAMA_MODELS")
     if env_path:
         return os.path.expanduser(env_path)
@@ -135,11 +136,36 @@ def get_default_models_path():
     system = platform.system().lower()
     if system == "windows":
         base = os.environ.get("USERPROFILE", os.path.expanduser("~"))
-        candidate = os.path.join(base, ".ollama", "models")
+        candidates = [os.path.join(base, ".ollama", "models")]
     else:
-        candidate = os.path.expanduser("~/.ollama/models")
+        candidates = [
+            "/usr/share/ollama/.ollama/models",  # system service (Linux official install)
+            "/var/lib/ollama/.ollama/models",     # some Linux distros
+            os.path.expanduser("~/.ollama/models"),  # user install / macOS
+        ]
 
-    return candidate
+    # Return the first path that already has Ollama's directory structure
+    for path in candidates:
+        if os.path.isdir(os.path.join(path, "blobs")) or \
+           os.path.isdir(os.path.join(path, "manifests")):
+            return path
+
+    # Fall back to user home path
+    if system == "windows":
+        return candidates[0]
+    return os.path.expanduser("~/.ollama/models")
+
+def verify_ollama_sees_model(model_key):
+    """Check if the Ollama service can see the installed model via its API."""
+    try:
+        req = urllib.request.Request("http://localhost:11434/api/tags")
+        with urllib.request.urlopen(req, timeout=3) as r:
+            data = json.loads(r.read())
+            names = [m.get("name", "") for m in data.get("models", [])]
+            # model_key may be "gemma2:2b" — check if it appears in any listed name
+            return any(model_key.split(":")[0] in n for n in names)
+    except Exception:
+        return None  # Ollama not running or unreachable
 
 def get_models_path(explicit_path=None):
     if explicit_path:
@@ -182,32 +208,51 @@ def _render_progress(label, downloaded, total, speed_bps, elapsed):
         cols = 80
 
     pct = downloaded / total if total > 0 else 0
-    bar_width = 18
-    filled = int(bar_width * pct)
-    bar = "█" * filled + "░" * (bar_width - filled)
 
-    pct_str   = f"{pct * 100:5.1f}%"
+    # Build fixed right side: "  165/261 MB  2.6 MB/s  ETA 58s"
+    size_str  = f"{format_size(downloaded)}/{format_size(total)}"
     speed_str = f"{format_size(speed_bps)}/s" if speed_bps > 0 else ""
     remaining = total - downloaded
     eta_str   = f"ETA {format_eta(remaining / speed_bps)}" if speed_bps > 0 else ""
+    right = f"  {size_str}  {speed_str}  {eta_str}"
 
-    # Build right side first (fixed width stats)
-    stats = f"  {pct_str}  {speed_str}  {eta_str}"
-    # Build left side (label + bar)
-    left  = f"  {label}  {bar}"
+    # Calculate how much space is left for label + bar
+    # Layout: "  {label}  {bar}{right}"  — prefix=2, sep=2
+    bar_width = 18
+    prefix = "  "
+    sep    = "  "
+    available = cols - len(prefix) - len(sep) - bar_width - len(right) - 1
+    label_display = label[:max(0, available)]
 
-    visible_line = left + stats
-    # Pad with spaces to erase previous longer line, then clamp to terminal width
-    padded = visible_line.ljust(cols - 1)[:cols - 1]
+    # Shrink bar if terminal is very narrow
+    if available < 0:
+        bar_width = max(5, cols - len(prefix) - len(right) - 2)
+        label_display = ""
 
-    # Now build the colored version at the same clamped length
-    colored = (
-        f"  {Colors.DIM}{label}{Colors.ENDC}  "
-        f"{Colors.OKCYAN}{bar}{Colors.ENDC}"
-        f"{Colors.BOLD}{stats}{Colors.ENDC}"
-    )
-    # Print with spaces to fill remaining terminal width
-    trailing = " " * max(0, cols - len(visible_line) - 1)
+    filled = int(bar_width * pct)
+    bar = "█" * filled + "░" * (bar_width - filled)
+
+    # Build plain version to measure true visible length
+    if label_display:
+        plain = f"{prefix}{label_display}{sep}{bar}{right}"
+    else:
+        plain = f"{prefix}{bar}{right}"
+
+    trailing = " " * max(0, cols - len(plain) - 1)
+
+    # Build colored version (same structure, ANSI codes don't affect visible width)
+    if label_display:
+        colored = (
+            f"{prefix}{Colors.DIM}{label_display}{Colors.ENDC}{sep}"
+            f"{Colors.OKCYAN}{bar}{Colors.ENDC}"
+            f"{Colors.BOLD}{right}{Colors.ENDC}"
+        )
+    else:
+        colored = (
+            f"{prefix}{Colors.OKCYAN}{bar}{Colors.ENDC}"
+            f"{Colors.BOLD}{right}{Colors.ENDC}"
+        )
+
     print(f"\r{colored}{trailing}", end="", flush=True)
 
 def download_with_urllib(url, dest_path, expected_size, label=""):
@@ -391,6 +436,21 @@ def cmd_pull(args):
     model_key = f"{namespace}/{model}:{tag}" if namespace != "library" else f"{model}:{tag}"
     models_path = get_models_path(getattr(args, 'modelsPath', None))
 
+    # Check write permission before doing anything
+    blobs_dir = os.path.join(models_path, "blobs")
+    os.makedirs(blobs_dir, exist_ok=True) if os.path.isdir(models_path) else None
+    test_path = models_path if not os.path.isdir(blobs_dir) else blobs_dir
+    if not os.access(test_path, os.W_OK):
+        print_error(f"No write permission to: {models_path}")
+        print(f"\n  Ollama's models folder requires elevated permissions.")
+        if platform.system().lower() == "windows":
+            print(f"  Re-run this terminal as Administrator, then:")
+            print(f"\n    {Colors.BOLD}pullama pull {args.model}{Colors.ENDC}\n")
+        else:
+            print(f"  Re-run with sudo:\n")
+            print(f"    {Colors.BOLD}sudo pullama pull {args.model}{Colors.ENDC}\n")
+        sys.exit(1)
+
     use_aria2 = check_aria2()
     if not use_aria2:
         print_aria2_hint()
@@ -469,11 +529,28 @@ def cmd_pull(args):
 
     # Update state
     state = load_state()
-    update_model_state(state, model_key, installed=True)
+    update_model_state(state, model_key, installed=True, models_path=models_path)
     save_state(state)
 
-    print(f"\n{Colors.OKGREEN}{Colors.BOLD}✔ {args.model} is ready!{Colors.ENDC}")
-    print(f"  Run: {Colors.BOLD}ollama run {args.model}{Colors.ENDC}\n")
+    # Verify Ollama can actually see the model
+    seen = verify_ollama_sees_model(model_key)
+    if seen:
+        print(f"\n{Colors.OKGREEN}{Colors.BOLD}✔ {args.model} is ready!{Colors.ENDC}")
+        print(f"  {Colors.DIM}Installed to: {models_path}{Colors.ENDC}")
+        print(f"  Run: {Colors.BOLD}ollama run {args.model}{Colors.ENDC}\n")
+    elif seen is False:
+        # Ollama is running but can't see the model — wrong path
+        print(f"\n{Colors.WARNING}⚠ Installed to: {models_path}{Colors.ENDC}")
+        print(f"  But Ollama can't see the model — it may use a different models directory.")
+        print(f"  Find the correct path with:")
+        print(f"    {Colors.BOLD}ls /usr/share/ollama/.ollama/models{Colors.ENDC}  (common on Linux)")
+        print(f"  Then re-run with:")
+        print(f"    {Colors.BOLD}pullama pull {args.model} --modelsPath <correct-path>{Colors.ENDC}\n")
+    else:
+        # Ollama not running — can't verify
+        print(f"\n{Colors.OKGREEN}{Colors.BOLD}✔ {args.model} is ready!{Colors.ENDC}")
+        print(f"  {Colors.DIM}Installed to: {models_path}{Colors.ENDC}")
+        print(f"  Run: {Colors.BOLD}ollama run {args.model}{Colors.ENDC}\n")
 
 
 def cmd_list(args):

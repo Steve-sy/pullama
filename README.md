@@ -73,10 +73,10 @@ pullama list
 ```
 
 ```
-  Model                  Size       Downloaded     Installed
-  ──────────────────────────────────────────────────────────
-  tinyllama:latest        608 MB    608 MB   ✔    ✔ yes
-  gemma2:2b               1.7 GB    856 MB  50%   ✗ no
+  Model                  Size       Downloaded       Installed
+  ────────────────────────────────────────────────────────────
+  tinyllama:latest        608 MB    608/608 MB  ✔   ✔ yes
+  gemma2:2b               1.7 GB    856 MB/1.7 GB   ✗ no
 ```
 
 ### Get direct download URLs (for wget, IDM, or other tools)
@@ -97,7 +97,7 @@ pullama install --model gemma2:2b --blobsPath ./downloads
 
 ## How it works
 
-Ollama models are stored as blobs (SHA256-named files). Pullama downloads each blob directly into `~/.ollama/models/blobs/` and writes the manifest file last — so Ollama only sees the model once everything is verified complete. If a download is interrupted, the partial blob stays on disk and is resumed via HTTP `Range` requests on the next run.
+Ollama models are stored as blobs (SHA256-named files). Pullama auto-detects where Ollama keeps its models (handles both user installs at `~/.ollama/models` and system service installs at `/usr/share/ollama/.ollama/models`), downloads each blob directly there, and writes the manifest file last — so Ollama only sees the model once everything is verified complete. If a download is interrupted, the partial blob stays on disk and is resumed via HTTP `Range` requests on the next run.
 
 **With aria2 installed**, each file is split into 4 parallel chunks for significantly faster downloads — especially useful when the server throttles single connections.
 
