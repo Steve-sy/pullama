@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "pullama"
+name = "pullama-cli"
 version = "1.0.0"
 description = "Fix ollama pull TLS timeout and disconnects — resumable Ollama model downloader for slow connections"
 readme = "README.md"

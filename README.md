@@ -1,4 +1,4 @@
-# Pullama 🦙
+# Pullama 🦙 Ollama model download manager
 
 **Fix for `ollama pull` disconnecting, TLS handshake timeouts, and slow internet.**
 
@@ -12,12 +12,14 @@ download interrupted, starting from scratch
 
 Pullama replaces `ollama pull` with a resumable downloader — if your connection drops, just run the same command again and it picks up exactly where it stopped. Works on slow connections, unstable Wi-Fi, mobile data, and VPNs.
 
+![Pullama Demo](https://i.ibb.co/gFvNN7R1/Screenshot-from-2026-03-28-16-55-43.png)
+
 ---
 
 ## Install
 
 ```bash
-pip install pullama
+pip install pullama-cli
 ```
 
 **Boost download speed with aria2 (optional but recommended):**
