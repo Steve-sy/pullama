@@ -126,6 +126,25 @@ huihui_ai/deepseek-r1:8b            # community model (namespace/model:tag)
 
 ---
 
+## Ollama not installed?
+
+No problem — Pullama still downloads the model files and saves them locally:
+
+```bash
+pullama pull gemma2:2b
+# ⚠ Ollama not found — downloading to: ~/pullama-models/gemma2-2b/
+# ...
+# ✔ gemma2:2b downloaded!
+#   Saved to: ~/pullama-models/gemma2-2b/
+#
+#   Once Ollama is installed, run:
+#     pullama install --model gemma2:2b --blobsPath ~/pullama-models/gemma2-2b/
+```
+
+You can also copy that folder to another machine and install from there.
+
+---
+
 ## Why not just use `ollama pull`?
 
 `ollama pull` streams the entire model in one HTTP connection. On unstable or slow connections this means:
@@ -141,3 +160,10 @@ Pullama solves all three.
 ## License
 
 MIT
+
+---
+
+## Credits
+
+Pullama started as a fork of [oget](https://github.com/fr0stb1rd/oget) by [fr0stb1rd](https://github.com/fr0stb1rd). The original idea of fetching direct download URLs from the Ollama registry belongs to them. 
+Pullama extends it with faster & resumable downloads, automatic install to ollama, aria2 support, state tracking, smart path detection, and a fully rewritten CLI built for slow and unstable connections.

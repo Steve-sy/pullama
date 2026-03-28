@@ -434,22 +434,38 @@ def cmd_get(args):
 def cmd_pull(args):
     namespace, model, tag = parse_model_name(args.model)
     model_key = f"{namespace}/{model}:{tag}" if namespace != "library" else f"{model}:{tag}"
-    models_path = get_models_path(getattr(args, 'modelsPath', None))
 
-    # Check write permission before doing anything
-    blobs_dir = os.path.join(models_path, "blobs")
-    os.makedirs(blobs_dir, exist_ok=True) if os.path.isdir(models_path) else None
-    test_path = models_path if not os.path.isdir(blobs_dir) else blobs_dir
-    if not os.access(test_path, os.W_OK):
-        print_error(f"No write permission to: {models_path}")
-        print(f"\n  Ollama's models folder requires elevated permissions.")
-        if platform.system().lower() == "windows":
-            print(f"  Re-run this terminal as Administrator, then:")
-            print(f"\n    {Colors.BOLD}pullama pull {args.model}{Colors.ENDC}\n")
-        else:
-            print(f"  Re-run with sudo:\n")
-            print(f"    {Colors.BOLD}sudo pullama pull {args.model}{Colors.ENDC}\n")
-        sys.exit(1)
+    # Detect whether Ollama is installed
+    ollama_installed = shutil.which("ollama") is not None
+    explicit_path = getattr(args, 'modelsPath', None)
+
+    if ollama_installed or explicit_path:
+        # Mode A: Ollama is installed — download directly into its models folder
+        ollama_mode = True
+        models_path = get_models_path(explicit_path)
+        blobs_dir = os.path.join(models_path, "blobs")
+
+        # Check write permission before doing anything
+        os.makedirs(blobs_dir, exist_ok=True) if os.path.isdir(models_path) else None
+        test_path = blobs_dir if os.path.isdir(blobs_dir) else models_path
+        if not os.access(test_path, os.W_OK):
+            print_error(f"No write permission to: {models_path}")
+            print(f"\n  Ollama's models folder requires elevated permissions.")
+            if platform.system().lower() == "windows":
+                print(f"  Re-run this terminal as Administrator, then:")
+                print(f"\n    {Colors.BOLD}pullama pull {args.model}{Colors.ENDC}\n")
+            else:
+                print(f"  Re-run with sudo:\n")
+                print(f"    {Colors.BOLD}sudo pullama pull {args.model}{Colors.ENDC}\n")
+            sys.exit(1)
+    else:
+        # Mode B: Ollama not installed — download to ~/pullama-models/model-tag/
+        ollama_mode = False
+        safe_name = model_key.replace(":", "-").replace("/", "_")
+        models_path = os.path.expanduser(f"~/pullama-models/{safe_name}")
+        blobs_dir = models_path
+        print_warning(f"Ollama not found — downloading to: {models_path}")
+        print(f"  {Colors.DIM}Install Ollama from https://ollama.com then run pullama install.{Colors.ENDC}\n")
 
     use_aria2 = check_aria2()
     if not use_aria2:
@@ -488,7 +504,6 @@ def cmd_pull(args):
     save_state(state)
 
     # Download blobs
-    blobs_dir = os.path.join(models_path, "blobs")
     os.makedirs(blobs_dir, exist_ok=True)
 
     for i, layer in enumerate(layers, 1):
@@ -518,39 +533,53 @@ def cmd_pull(args):
             sys.exit(1)
         print(f"\r{' ' * 40}\r", end="")
 
-    # Write manifest (last step — Ollama sees model only after this)
-    print(f"\n  Installing into Ollama...", end="", flush=True)
-    manifest_dir = os.path.join(models_path, "manifests", DEFAULT_REGISTRY, namespace, model)
-    os.makedirs(manifest_dir, exist_ok=True)
-    manifest_dest = os.path.join(manifest_dir, tag)
-    with open(manifest_dest, "w", encoding="utf-8") as f:
-        f.write(raw_manifest)
-    print(f"\r  Installing into Ollama...{' ' * 10}  {Colors.OKGREEN}✔{Colors.ENDC}")
+    if ollama_mode:
+        # Write manifest into Ollama's folder (makes model visible to Ollama)
+        print(f"\n  Installing into Ollama...", end="", flush=True)
+        manifest_dir = os.path.join(models_path, "manifests", DEFAULT_REGISTRY, namespace, model)
+        os.makedirs(manifest_dir, exist_ok=True)
+        manifest_dest = os.path.join(manifest_dir, tag)
+        with open(manifest_dest, "w", encoding="utf-8") as f:
+            f.write(raw_manifest)
+        print(f"\r  Installing into Ollama...{' ' * 10}  {Colors.OKGREEN}✔{Colors.ENDC}")
 
-    # Update state
-    state = load_state()
-    update_model_state(state, model_key, installed=True, models_path=models_path)
-    save_state(state)
+        # Update state
+        state = load_state()
+        update_model_state(state, model_key, installed=True, models_path=models_path)
+        save_state(state)
 
-    # Verify Ollama can actually see the model
-    seen = verify_ollama_sees_model(model_key)
-    if seen:
-        print(f"\n{Colors.OKGREEN}{Colors.BOLD}✔ {args.model} is ready!{Colors.ENDC}")
-        print(f"  {Colors.DIM}Installed to: {models_path}{Colors.ENDC}")
-        print(f"  Run: {Colors.BOLD}ollama run {args.model}{Colors.ENDC}\n")
-    elif seen is False:
-        # Ollama is running but can't see the model — wrong path
-        print(f"\n{Colors.WARNING}⚠ Installed to: {models_path}{Colors.ENDC}")
-        print(f"  But Ollama can't see the model — it may use a different models directory.")
-        print(f"  Find the correct path with:")
-        print(f"    {Colors.BOLD}ls /usr/share/ollama/.ollama/models{Colors.ENDC}  (common on Linux)")
-        print(f"  Then re-run with:")
-        print(f"    {Colors.BOLD}pullama pull {args.model} --modelsPath <correct-path>{Colors.ENDC}\n")
+        # Verify Ollama can actually see the model
+        seen = verify_ollama_sees_model(model_key)
+        if seen:
+            print(f"\n{Colors.OKGREEN}{Colors.BOLD}✔ {args.model} is ready!{Colors.ENDC}")
+            print(f"  {Colors.DIM}Installed to: {models_path}{Colors.ENDC}")
+            print(f"  Run: {Colors.BOLD}ollama run {args.model}{Colors.ENDC}\n")
+        elif seen is False:
+            print(f"\n{Colors.WARNING}⚠ Installed to: {models_path}{Colors.ENDC}")
+            print(f"  But Ollama can't see the model — it may use a different models directory.")
+            print(f"  Find the correct path with:")
+            print(f"    {Colors.BOLD}ls /usr/share/ollama/.ollama/models{Colors.ENDC}  (common on Linux)")
+            print(f"  Then re-run with:")
+            print(f"    {Colors.BOLD}pullama pull {args.model} --modelsPath <correct-path>{Colors.ENDC}\n")
+        else:
+            print(f"\n{Colors.OKGREEN}{Colors.BOLD}✔ {args.model} is ready!{Colors.ENDC}")
+            print(f"  {Colors.DIM}Installed to: {models_path}{Colors.ENDC}")
+            print(f"  Run: {Colors.BOLD}ollama run {args.model}{Colors.ENDC}\n")
     else:
-        # Ollama not running — can't verify
-        print(f"\n{Colors.OKGREEN}{Colors.BOLD}✔ {args.model} is ready!{Colors.ENDC}")
-        print(f"  {Colors.DIM}Installed to: {models_path}{Colors.ENDC}")
-        print(f"  Run: {Colors.BOLD}ollama run {args.model}{Colors.ENDC}\n")
+        # No Ollama — write manifest into the local folder alongside blobs
+        manifest_dest = os.path.join(models_path, "manifest")
+        with open(manifest_dest, "w", encoding="utf-8") as f:
+            f.write(raw_manifest)
+
+        state = load_state()
+        update_model_state(state, model_key, installed=False, models_path=models_path)
+        save_state(state)
+
+        print(f"\n{Colors.OKGREEN}{Colors.BOLD}✔ {args.model} downloaded!{Colors.ENDC}")
+        print(f"  {Colors.DIM}Saved to: {models_path}{Colors.ENDC}")
+        print(f"\n  Once Ollama is installed, run:")
+        print(f"    {Colors.BOLD}pullama install --model {args.model} --blobsPath {models_path}{Colors.ENDC}")
+        print(f"\n  {Colors.DIM}Or copy that folder to another machine and run the same command.{Colors.ENDC}\n")
 
 
 def cmd_list(args):
