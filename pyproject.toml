@@ -44,6 +44,9 @@ classifiers = [
 [project.scripts]
 pullama = "pullama.__main__:main"
 
+[tool.hatch.build.targets.wheel]
+packages = ["pullama"]
+
 [project.urls]
 Homepage = "https://github.com/Steve-sy/pullama"
 Issues = "https://github.com/Steve-sy/pullama/issues"

@@ -1,4 +1,4 @@
-# Pullama 🦙 — Ollama Model Downloader & Offline Installer
+# Pullama 🦙 Ollama Model Downloader & Installer
 
 **The ollama pull alternative built for slow, unstable, and limited internet connections.**
 
