@@ -3,13 +3,28 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "oget"
-version = "1.0.2"
-description = "Ollama Model Direct Downloader & Installer - get direct links and install models offline"
+name = "pullama"
+version = "1.0.0"
+description = "Fix ollama pull TLS timeout and disconnects — resumable Ollama model downloader for slow connections"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.8"
-keywords = ["ollama", "llm", "model", "download", "ai", "installer"]
+keywords = [
+    "ollama",
+    "ollama-pull",
+    "ollama-pull-alternative",
+    "llm",
+    "model",
+    "download",
+    "resume",
+    "slow-internet",
+    "tls-timeout",
+    "tls-handshake-timeout",
+    "offline",
+    "ai",
+    "ollama-offline",
+    "ollama-download-manager",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Console",
@@ -27,8 +42,8 @@ classifiers = [
 ]
 
 [project.scripts]
-oget = "oget.__main__:main"
+pullama = "pullama.__main__:main"
 
 [project.urls]
-Homepage = "https://github.com/fr0stb1rd/oget"
-Issues = "https://github.com/fr0stb1rd/oget/issues"
+Homepage = "https://github.com/yourusername/pullama"
+Issues = "https://github.com/yourusername/pullama/issues"

@@ -1,112 +1,142 @@
-# Oget 🦙
+# Pullama 🦙
 
-[![PyPI](https://img.shields.io/pypi/v/oget)](https://pypi.org/project/oget/)
-[![GitHub](https://img.shields.io/badge/github-fr0stb1rd%2Foget-blue?logo=github)](https://github.com/fr0stb1rd/oget)
+**Fix for `ollama pull` disconnecting, TLS handshake timeouts, and slow internet.**
 
-**Ollama Model Direct Downloader & Installer**
+If you've seen any of these errors, Pullama is for you:
 
-Get direct download links for Ollama models and install locally downloaded models — no internet required at install time. \| Blog: [🇬🇧 English](https://fr0stb1rd.gitlab.io/posts/oget-ollama-model-downloader/) \| Blog: [🇹🇷 Türkçe](https://fr0stb1rd.gitlab.io/posts/oget-ollama-model-indirici/) \| [GitHub](https://github.com/fr0stb1rd/oget) \| [PyPI](https://pypi.org/project/oget/)
+```
+net/http: TLS handshake timeout
+context deadline exceeded
+download interrupted, starting from scratch
+```
 
-## Why?
+Pullama replaces `ollama pull` with a resumable downloader — if your connection drops, just run the same command again and it picks up exactly where it stopped. Works on slow connections, unstable Wi-Fi, mobile data, and VPNs.
 
-`ollama pull` can be slow or unreliable in some regions. Oget lets you:
-- Get direct CDN download links for any Ollama model
-- Download using your own download manager (IDM, aria2, wget, curl...)
-- Install the downloaded files into Ollama offline
+---
 
 ## Install
 
-### via pip (all platforms)
-
 ```bash
-pip install oget
+pip install pullama
 ```
 
-### via AUR (Arch Linux)
+**Boost download speed with aria2 (optional but recommended):**
 
 ```bash
-# Using yay
-yay -S oget
+# Linux (Debian/Ubuntu)
+sudo apt install aria2
 
-# Using paru
-paru -S oget
+# macOS
+brew install aria2
 
-# Manual
-git clone https://aur.archlinux.org/oget.git
-cd oget
-makepkg -si
+# Windows
+winget install aria2
 ```
+
+---
 
 ## Usage
 
-### Step 1 — Get download links
+### Download & install a model in one command
 
 ```bash
-oget get gemma2:2b
-# oget get deepseek-r1:7b
-# oget get huihui_ai/deepseek-r1-abliterated:8b
+pullama pull tinyllama:latest
+pullama pull gemma2:2b
+pullama pull deepseek-r1:7b
+pullama pull huihui_ai/deepseek-r1-abliterated:8b
 ```
 
-**Example Output:**
-
-```text
-ℹ Fetching direct download link for model: gemma2:2b
-
-Curl command to download the manifest (run in your manifest folder):
-curl -L "https://registry.ollama.ai/v2/library/gemma2/manifests/2b" -o "manifest"
-
-Download links for layers:
-1 - [1.5 GB] https://registry.ollama.ai/v2/library/gemma2/blobs/sha256:74627347...
-2 - [358 B]  https://registry.ollama.ai/v2/library/gemma2/blobs/sha256:e0a42594...
-...
-
-Curl command to download all blobs (run in your blobs folder):
-curl -L "https://registry.ollama.ai/v2/library/gemma2/blobs/sha256:74627347..." -o "sha256-74627347..."
-curl -L "https://registry.ollama.ai/v2/library/gemma2/blobs/sha256:e0a42594..." -o "sha256-e0a42594..."
-...
-```
-
-### Step 2 — Download the files
-
-Copy the printed `curl` commands and run them in two separate folders:
-- One folder for the **manifest**
-- One folder for the **blobs**
-
-### Step 3 — Install into Ollama
+That's it. Pullama downloads the model and installs it into Ollama automatically. Then run it:
 
 ```bash
-# Linux/macOS (requires sudo)
-sudo oget install --model gemma2:2b --blobsPath ./downloads
-
-# With explicit models path
-sudo oget install --model gemma2:2b --blobsPath ./downloads --modelsPath ~/.ollama/models
+ollama run tinyllama:latest
 ```
 
-Then run as usual:
+### Resume an interrupted download
+
+Just run the exact same command again:
 
 ```bash
-ollama run gemma2:2b
+pullama pull gemma2:2b
+# ... connection drops at 60% ...
+
+pullama pull gemma2:2b
+# ℹ Resuming from 1.1 GB / 1.7 GB
 ```
 
-## Models Path
+No flags needed. Pullama detects the partial download and continues from where it stopped — even after days, power outages, or switching networks.
 
-Oget resolves the Ollama models directory in this order:
+### See what you've downloaded
 
-| Priority | Source |
-|----------|--------|
-| 1st | `--modelsPath` CLI argument |
-| 2nd | `OLLAMA_MODELS` environment variable |
-| Error | Helpful instructions are printed |
+```bash
+pullama list
+```
 
-## Supported Platforms
+```
+  Model                  Size       Downloaded     Installed
+  ──────────────────────────────────────────────────────────
+  tinyllama:latest        608 MB    608 MB   ✔    ✔ yes
+  gemma2:2b               1.7 GB    856 MB  50%   ✗ no
+```
 
-- Linux
-- macOS
-- Windows
+### Get direct download URLs (for wget, IDM, or other tools)
 
-## Zero Dependencies
+```bash
+pullama get gemma2:2b
+```
 
-Oget uses only Python standard library — no `pip install` requirements beyond Python 3.8+.
+Prints direct URLs and ready-to-use curl commands. Useful if you want to download with your own tool.
+
+### Install from manually downloaded files
+
+```bash
+pullama install --model gemma2:2b --blobsPath ./downloads
+```
+
+---
+
+## How it works
+
+Ollama models are stored as blobs (SHA256-named files). Pullama downloads each blob directly into `~/.ollama/models/blobs/` and writes the manifest file last — so Ollama only sees the model once everything is verified complete. If a download is interrupted, the partial blob stays on disk and is resumed via HTTP `Range` requests on the next run.
+
+**With aria2 installed**, each file is split into 4 parallel chunks for significantly faster downloads — especially useful when the server throttles single connections.
+
+**Without aria2**, Pullama uses Python's built-in HTTP client with the same resume support.
+
+---
+
+## Model name format
+
+```
+tinyllama:latest                    # official model, explicit tag
+gemma2:2b                           # official model
+deepseek-r1:7b                      # official model
+huihui_ai/deepseek-r1:8b            # community model (namespace/model:tag)
+```
+
+---
+
+## Platform support
+
+| Platform | Supported |
+|---|---|
+| Linux | ✔ |
+| macOS | ✔ |
+| Windows | ✔ |
+
+---
+
+## Why not just use `ollama pull`?
+
+`ollama pull` streams the entire model in one HTTP connection. On unstable or slow connections this means:
+
+- Any interruption restarts from zero
+- TLS handshakes time out on high-latency connections
+- No way to resume or track progress across sessions
+
+Pullama solves all three.
+
+---
 
 ## License
 
