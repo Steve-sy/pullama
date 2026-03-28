@@ -185,6 +185,22 @@ def verify_blob(filepath, expected_digest):
     actual_hash = get_file_hash(filepath)
     return actual_hash == expected_hash
 
+def chown_to_match(path, base_path):
+    """Chown path and any parent dirs (down to base_path) to match base_path's owner.
+    Only runs when called as root — silently skips otherwise."""
+    if platform.system().lower() == "windows" or os.geteuid() != 0:
+        return
+    try:
+        st = os.stat(base_path)
+        uid, gid = st.st_uid, st.st_gid
+        target = os.path.abspath(path)
+        base = os.path.abspath(base_path)
+        while target != base and target.startswith(base + os.sep):
+            os.chown(target, uid, gid)
+            target = os.path.dirname(target)
+    except Exception:
+        pass
+
 
 # ─── Download Engine ──────────────────────────────────────────────────────────
 
@@ -539,6 +555,7 @@ def cmd_pull(args):
             print_error("Corrupted file removed. Run the command again to re-download.")
             sys.exit(1)
         print(f"\r{' ' * 40}\r", end="")
+        chown_to_match(dest_path, models_path)
 
     if ollama_mode:
         # Write manifest into Ollama's folder (makes model visible to Ollama)
@@ -548,6 +565,7 @@ def cmd_pull(args):
         manifest_dest = os.path.join(manifest_dir, tag)
         with open(manifest_dest, "w", encoding="utf-8") as f:
             f.write(raw_manifest)
+        chown_to_match(manifest_dest, models_path)
         print(f"\r  Installing into Ollama...{' ' * 10}  {Colors.OKGREEN}✔{Colors.ENDC}")
 
         # Update state
