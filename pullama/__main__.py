@@ -18,6 +18,7 @@ import os
 import json
 import urllib.request
 import urllib.error
+from pullama.search import cmd_search
 import shutil
 import hashlib
 import platform
@@ -787,6 +788,7 @@ def print_main_help():
   {Colors.OKGREEN}get <model>{Colors.ENDC}         Print direct download URLs only
   {Colors.OKGREEN}install{Colors.ENDC} [options]   Install from manually downloaded files
   {Colors.OKGREEN}list{Colors.ENDC}                Show all tracked models and their status
+  {Colors.OKGREEN}search <query>{Colors.ENDC}      Search the Ollama model library
 
 {Colors.BOLD}QUICK START{Colors.ENDC}
   {Colors.OKCYAN}pullama pull tinyllama:latest{Colors.ENDC}
@@ -842,6 +844,15 @@ def main():
     # list
     parser_list = subparsers.add_parser("list", help="Show all tracked models")
     parser_list.set_defaults(func=cmd_list)
+
+    # search
+    parser_search = subparsers.add_parser("search", help="Search Ollama model library")
+    parser_search.add_argument("query", help="Search term, e.g. qwen or vision")
+    parser_search.add_argument("--limit", type=int, default=10, metavar="N",
+                               help="Max results to show (default: 10)")
+    parser_search.add_argument("--capabilities", nargs="+", metavar="CAP",
+                               help="Filter by capability: vision tools embedding")
+    parser_search.set_defaults(func=cmd_search)
 
     args = parser.parse_args()
     try:

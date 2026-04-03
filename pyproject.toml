@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pullama-cli"
-version = "1.0.2"
+version = "1.0.3"
 description = "Fix ollama pull TLS timeout and disconnects — resumable Ollama model downloader for slow connections"
 readme = "README.md"
 license = { text = "MIT" }
