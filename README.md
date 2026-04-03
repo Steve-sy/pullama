@@ -92,6 +92,7 @@ This is the core feature `ollama pull` is missing — once it disconnects, you l
 | Download without Ollama installed | ❌ | ✅ |
 | Export ollama model to another machine | ❌ | ✅ |
 | Track download progress across sessions | ❌ | ✅ |
+| Search the model library from terminal | ❌ | ✅ |
 | Works on slow / unstable connections | ⚠️ unreliable | ✅ |
 | SHA256 verification | ❌ | ✅ |
 
@@ -111,6 +112,56 @@ pullama list
   tinyllama:latest        608 MB    608/608 MB  ✔   ✔ yes
   gemma2:2b               1.7 GB    856 MB/1.7 GB   ✗ no
 ```
+
+### Search the Ollama library — without opening a browser
+
+No GUI, no browser, no scrolling through a website. Find the right model directly from your terminal:
+
+```bash
+pullama search qwen
+```
+
+```
+  Searching Ollama library for "qwen"...
+
+  Model                         Pulls       Tags    Updated
+  ────────────────────────────────────────────────────────────────────────
+  qwen2.5                       29.9M       93      6 weeks ago
+  Alibaba's latest series of Qwen models in a wide variety of sizes.
+  Sizes: 0.5b  1.5b  3b  7b  14b  32b  72b    Capabilities: tools
+  → pullama pull qwen2.5:0.5b
+
+  qwen2.5-coder                 7M          59      2 months ago
+  The latest series of Code-Specific Qwen models in various sizes.
+  Sizes: 0.5b  1.5b  3b  7b  14b  32b  72b    Capabilities: tools
+  → pullama pull qwen2.5-coder:0.5b
+
+  qwq                           3.8M        5       3 months ago
+  QwQ is the reasoning model of the Qwen series.
+  Sizes: 32b                                  Capabilities: tools
+  → pullama pull qwq:32b
+
+  Showing 10 result(s).  Use --limit N for more or --capabilities to filter.
+```
+
+Each result shows the model name, download count, available sizes, capabilities, and a ready-to-run pull command. No copy-pasting from a browser.
+
+**Filter by capability** — find only vision or tool-use models:
+
+```bash
+pullama search llama --capabilities vision
+pullama search mistral --capabilities tools
+```
+
+**Show more results:**
+
+```bash
+pullama search gemma --limit 20
+```
+
+Useful when you're on a headless server, SSH session, or simply faster than opening a browser.
+
+---
 
 ### Get direct download URLs
 
