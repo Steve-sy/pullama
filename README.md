@@ -90,7 +90,7 @@ This is the core feature `ollama pull` is missing — once it disconnects, you l
 | Parallel chunk downloads (aria2) | ❌ | ✅ |
 | Offline / manual install | ❌ | ✅ |
 | Download without Ollama installed | ❌ | ✅ |
-| Export ollama model to another machine | ❌ | ✅ |
+| Export ollama model for sharing offline | ❌ | ✅ |
 | Track download progress across sessions | ❌ | ✅ |
 | Search the model library from terminal | ❌ | ✅ |
 | Works on slow / unstable connections | ⚠️ unreliable | ✅ |
@@ -173,13 +173,42 @@ pullama get gemma2:2b
 
 Prints direct blob URLs and ready-to-use curl commands — useful for downloading ollama models on a separate machine or through a proxy.
 
+### Download from a USB drive or share models offline
+
+Have models on an Ollama machine but want to share them offline? Like giving a model to a friend with bad internet:
+
+```bash
+# Export an installed model
+pullama export qwen2.5:7b
+# creates: ./qwen2.5-7b-export/
+
+# Share the folder (USB, local network, etc.)
+
+# On another machine, install from the exported folder:
+pullama install /path/to/qwen2.5-7b-export/
+# ✔ Manifest copied.
+# ✔ Model installed successfully!
+# ℹ Run: ollama run qwen2.5:7b
+
+# No internet required. Works from USB drives, shared drives, and anything.
+```
+
+Custom export destination:
+
+```bash
+pullama export qwen2.5:7b -o /tmp/share
+pullama install /tmp/share
+```
+
 ### Manual Ollama model installation
 
 Already downloaded the files? Install them into Ollama without re-downloading:
 
 ```bash
-pullama install --model gemma2:2b --blobsPath ./downloads
+pullama install ./downloads
 ```
+
+> Backward compatible: `pullama install --model gemma2:2b --blobsPath ./downloads` still works.
 
 ---
 

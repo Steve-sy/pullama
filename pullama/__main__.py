@@ -19,6 +19,7 @@ import json
 import urllib.request
 import urllib.error
 from pullama.search import cmd_search
+from pullama.export import cmd_export, cmd_install
 import shutil
 import hashlib
 import platform
@@ -685,89 +686,6 @@ def cmd_list(args):
         print(f"  {Colors.DIM}Tip: Resume incomplete downloads with: pullama pull <model>{Colors.ENDC}\n")
 
 
-def cmd_install(args):
-    namespace, model, tag = parse_model_name(args.model)
-    model_key = f"{namespace}/{model}:{tag}" if namespace != "library" else f"{model}:{tag}"
-    blobs_path = os.path.expanduser(args.blobsPath)
-
-    print_info(f"Installing model: {Colors.BOLD}{args.model}{Colors.ENDC}")
-
-    if not os.path.exists(blobs_path):
-        print_error(f"Path '{blobs_path}' does not exist.")
-        sys.exit(1)
-
-    manifest_source = os.path.join(blobs_path, "manifest")
-    if not os.path.isfile(manifest_source):
-        print_error(f"No 'manifest' file found in '{blobs_path}'.")
-        sys.exit(1)
-
-    models_path = get_models_path(getattr(args, 'modelsPath', None))
-
-    # Check if we need elevated permissions (system path)
-    if not models_path.startswith(os.path.expanduser("~")):
-        system = platform.system().lower()
-        if system != "windows" and os.geteuid() != 0:
-            print_error("System models path requires elevated permissions.")
-            actual_path = shutil.which("pullama") or os.path.abspath(sys.argv[0])
-            symlink_exists = os.path.exists("/usr/local/bin/pullama")
-            if not symlink_exists:
-                print(f"\n  One-time setup — make pullama available to sudo:\n")
-                print(f"    {Colors.BOLD}sudo ln -s {actual_path} /usr/local/bin/pullama{Colors.ENDC}\n")
-                print(f"  Then re-run:\n")
-            else:
-                print(f"\n  Re-run with sudo:\n")
-            print(f"    {Colors.BOLD}sudo pullama install --model {args.model} --blobsPath {args.blobsPath}{Colors.ENDC}\n")
-            sys.exit(1)
-
-    # Copy manifest
-    manifest_dest_dir = os.path.join(models_path, "manifests", DEFAULT_REGISTRY, namespace, model)
-    os.makedirs(manifest_dest_dir, exist_ok=True)
-    manifest_dest = os.path.join(manifest_dest_dir, tag)
-
-    if os.path.exists(manifest_dest):
-        print_warning("Model already installed. Overwrite? (Y/n) ", end="")
-        choice = input("").strip().upper()
-        if choice not in ("Y", ""):
-            print_error("Installation aborted.")
-            sys.exit(1)
-
-    shutil.copy2(manifest_source, manifest_dest)
-    print_success("Manifest copied.")
-
-    # Copy blobs
-    blobs_dest_dir = os.path.join(models_path, "blobs")
-    os.makedirs(blobs_dest_dir, exist_ok=True)
-
-    print_info("Copying blobs (this may take a while)...")
-    for filename in os.listdir(blobs_path):
-        if filename == "manifest" or os.path.isdir(os.path.join(blobs_path, filename)):
-            continue
-
-        file_source = os.path.join(blobs_path, filename)
-
-        if "sha256" not in filename:
-            print_info(f"Computing SHA256 for {filename}...")
-            hashed_name = "sha256-" + get_file_hash(file_source)
-        elif filename.startswith("sha256-"):
-            hashed_name = filename
-        elif filename.startswith("sha256:"):
-            hashed_name = filename.replace("sha256:", "sha256-", 1)
-        else:
-            hashed_name = filename
-
-        file_dest = os.path.join(blobs_dest_dir, hashed_name)
-        print_info(f"  {filename} → {hashed_name}")
-        shutil.copy2(file_source, file_dest)
-
-    # Update state
-    state = load_state()
-    update_model_state(state, model_key, installed=True,
-                       namespace=namespace, model=model, tag=tag)
-    save_state(state)
-
-    print_success(f"Model installed successfully!")
-    print_info(f"Run: {Colors.BOLD}ollama run {args.model}{Colors.ENDC}")
-
 
 # ─── Help Banner ──────────────────────────────────────────────────────────────
 
@@ -786,7 +704,8 @@ def print_main_help():
 {Colors.BOLD}COMMANDS{Colors.ENDC}
   {Colors.OKGREEN}pull <model>{Colors.ENDC}        Download & install a model (resume supported)
   {Colors.OKGREEN}get <model>{Colors.ENDC}         Print direct download URLs only
-  {Colors.OKGREEN}install{Colors.ENDC} [options]   Install from manually downloaded files
+  {Colors.OKGREEN}install{Colors.ENDC} [folder]    Install from an exported model folder
+  {Colors.OKGREEN}export <model>{Colors.ENDC}      Export an installed model for sharing
   {Colors.OKGREEN}list{Colors.ENDC}                Show all tracked models and their status
   {Colors.OKGREEN}search <query>{Colors.ENDC}      Search the Ollama model library
 
@@ -833,13 +752,22 @@ def main():
     parser_get.set_defaults(func=cmd_get)
 
     # install
-    parser_install = subparsers.add_parser("install", help="Install from downloaded files")
-    parser_install.add_argument("--model", required=True, metavar="MODEL")
-    parser_install.add_argument("--blobsPath", required=True, metavar="PATH",
-                                help="Folder with manifest + blob files")
+    parser_install = subparsers.add_parser("install", help="Install from an exported model folder")
+    parser_install.add_argument("folder", nargs="?", help="Exported model folder")
+    parser_install.add_argument("--model", metavar="MODEL",
+                                help="Model name (optional if folder name is inferable)")
+    parser_install.add_argument("--blobsPath", metavar="PATH",
+                                help="Deprecated: use positional folder argument")
     parser_install.add_argument("--modelsPath", default=None, metavar="PATH",
                                 help="Override Ollama models directory")
     parser_install.set_defaults(func=cmd_install)
+
+    # export
+    parser_export = subparsers.add_parser("export", help="Export an installed model for sharing")
+    parser_export.add_argument("model", help="Installed model name, e.g. qwen2.5:7b")
+    parser_export.add_argument("-o", "--output", default=None, metavar="PATH",
+                               help="Export directory (default: ./<model>-export/)")
+    parser_export.set_defaults(func=cmd_export)
 
     # list
     parser_list = subparsers.add_parser("list", help="Show all tracked models")
